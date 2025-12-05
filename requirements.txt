@@ -1,0 +1,5 @@
+Django>=5.0,<6.0
+psycopg2-binary>=2.9,<3.0
+python-dotenv>=1.0,<2.0
+dj-database-url>=2.0,<3.0
+PyPDF2>=3.0,<4.0
