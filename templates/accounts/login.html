@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <main class="form-signin w-100 m-auto">
+  <form method="post">
+    {% csrf_token %}
+    <h2 class="h3 mb-3 fw-normal">ログインしてください</h2>
+    <p>{{ error }}</p>
+    <div class="form-floating">
+      <input type="text" name="username" class="form-control" id="floatingInput" placeholder="ユーザ名" >
+      <label for="floatingInput">ユーザ名</label>
+    </div>
+    <div class="form-floating">
+      <input type="password" name="password" class="form-control" id="floatingPassword" placeholder="パスワード">
+      <label for="floatingPassword">パスワード</label>
+    </div>
+    <button class="btn btn-primary w-100 py-2" type="submit">ログイン</button>
+  </form>
+</main>
+</body>
+</html>
