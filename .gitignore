@@ -6,8 +6,7 @@ __pycache__
 .env
 media/
 scripts/
-services/
 docs/
-templates/
+text_splitter.py
 # テスト用
 sample.pdf
