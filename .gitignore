@@ -1,0 +1,13 @@
+
+learning
+venv
+__pycache__
+*.pyc
+.env
+media/
+scripts/
+services/
+docs/
+templates/
+# テスト用
+sample.pdf
