@@ -7,6 +7,5 @@ __pycache__
 media/
 scripts/
 docs/
-text_splitter.py
 # テスト用
 sample.pdf

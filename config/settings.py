@@ -8,6 +8,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+# OPENAI_API_KEY
+OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 # ファイルのアップロード先
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
