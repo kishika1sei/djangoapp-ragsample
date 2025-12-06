@@ -6,6 +6,7 @@ from django.views.decorators.http import require_POST
 from django.core.files.storage import default_storage
 from django.conf import settings
 from .forms import DocumentUploadForm
+from documents.services.document_ingestion import DocumentIngestionService
 # ログイン済みのみこのメソッドを通す
 # system_adminとdept_adminだけがアップロードできるようにする
 @login_required
@@ -13,19 +14,19 @@ def dashboard(request):
     # POSTリクエストがあったときはアップロードフォームから送信されたファイルをDocumentモデルに保存
     if request.method == 'POST':
         form = DocumentUploadForm(request.POST, request.FILES)
-
         if form.is_valid():
             upload_file = form.cleaned_data['file']
             # 1.ファイルを保存
             save_path = default_storage.save(f'{settings.MEDIA_ROOT}/{upload_file.name}', upload_file)
-
             # 2.documentインスタンスを作成して保存
-            Document.objects.create(
+            document = Document.objects.create(
             title=upload_file.name,
             file_path=save_path,
             department=request.user.department,
             uploaded_by=request.user,
             )
+            # 3.DocumentIngestionService に「Document」を渡す
+            DocumentIngestionService.ingest_document(document)
             
             return redirect('documents:dashboard')
     # GETリクエストがあった時に既存のドキュメント一覧を表示する

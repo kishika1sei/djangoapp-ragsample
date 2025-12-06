@@ -60,4 +60,4 @@ class PDFContentExtractor(ContentExtractor):
             }
         )
     
-    # TODO:テキストやcsv、マークダウンのExtractorもここに実装していく予定
+# TODO:テキストやcsv、マークダウンのExtractorもここに実装していく予定
