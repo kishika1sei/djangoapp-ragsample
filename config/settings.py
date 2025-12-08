@@ -10,6 +10,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # OPENAI_API_KEY
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
+
+STATICFILES_DIRS = [str(BASE_DIR / 'static')]
+
 # ファイルのアップロード先
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

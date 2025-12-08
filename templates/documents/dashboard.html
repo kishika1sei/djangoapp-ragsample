@@ -1,210 +1,160 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ドキュメント管理アプリ</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #fafafa;
-    }
-
-    .doc-wrapper {
-      max-width: 1200px;
-      margin: 20px auto;
-      padding: 16px;
-      border: 1px solid #ccc;
-      background-color: #fff;
-      box-sizing: border-box;
-    }
-
-    .doc-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-
-    .doc-title {
-      padding: 8px 16px;
-      border: 1px solid #333;
-      font-weight: bold;
-    }
-
-    .doc-user-info {
-      padding: 8px 16px;
-      border: 1px solid #333;
-      font-size: 14px;
-      text-align: center;
-    }
-
-    main {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .row {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-    }
-
-    .card {
-      border: 1px solid #333;
-      padding: 12px;
-      background-color: #fff;
-      box-sizing: border-box;
-      font-size: 14px;
-    }
-
-    .card h2 {
-      margin: 0 0 8px;
-      font-size: 15px;
-    }
-
-    .card h3 {
-      margin: 0 0 8px;
-      font-size: 14px;
-    }
-
-    .card table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    .card table th,
-    .card table td {
-      border: 1px solid #ccc;
-      padding: 4px 6px;
-      text-align: left;
-    }
-
-    .card form {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .card input[type="file"],
-    .card select {
-      padding: 4px;
-      font-size: 14px;
-    }
-
-    .card button {
-      align-self: flex-start;
-      padding: 4px 12px;
-      border: 1px solid #333;
-      background-color: #f5f5f5;
-      cursor: pointer;
-      font-size: 14px;
-    }
-  </style>
+  <title>ドキュメント管理ダッシュボード</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{% static 'style.css' %}?v=2">
 </head>
 <body>
-<div class="doc-wrapper">
+<div class="page page-dashboard">
 
-  <header class="doc-header">
-    <div class="doc-title">
-      ドキュメント管理アプリ
+  <!-- ヘッダー -->
+  <header class="page-header">
+    <div class="page-header-left">
+      <h1 class="app-title">ドキュメント管理ダッシュボード</h1>
+      <p class="app-subtitle">
+        社内問い合わせ用チャットボットで利用するドキュメントを管理します。
+      </p>
     </div>
-    <div class="doc-user-info">
-      {{ user.username }} でログイン中<br>
-      {{ user.department }} 部門<br>
-      <a href="{% url 'accounts:logout' %}">ログアウト</a>
+    <div class="page-header-right">
+      <div class="user-summary">
+        <div class="user-summary-name">
+          {{ user.username }} さんでログイン中
+        </div>
+        <div class="user-summary-dept">
+          所属部門：{{ user.department }}
+        </div>
+        <div class="user-summary-actions">
+          <a href="{% url 'chat:index' %}" class="link-secondary">チャット画面へ戻る</a>
+          <a href="{% url 'accounts:logout' %}" class="button-ghost">ログアウト</a>
+        </div>
+      </div>
     </div>
   </header>
 
-  <main>
-    <!-- 1段目：アップロード欄 ＋ 部門一覧 -->
-    <div class="row">
-      <section class="card" style="flex: 1;">
-        <h2>ドキュメントアップ欄</h2>
-        <form method="post" enctype="multipart/form-data">
+  <!-- メイン -->
+  <main class="page-main dashboard-main">
+
+    <!-- 1段目：アップロード + 部門一覧 -->
+    <div class="dashboard-row">
+      <!-- アップロード -->
+      <section class="panel dashboard-card">
+        <h2 class="panel-title">ドキュメントのアップロード</h2>
+        <p class="panel-description">
+          PDF / テキスト / CSV など、チャットボットの回答に利用するドキュメントを登録します。
+        </p>
+        <form method="post" enctype="multipart/form-data" class="upload-form">
           {% csrf_token %}
           {{ form.as_p }}
-          <button type="submit">アップロード</button>
+          <button type="submit" class="primary-button">
+            アップロード
+          </button>
         </form>
       </section>
 
-      <aside class="card" style="flex: 1;">
-        <h2>部門一覧表示</h2>
-        <ul>
+      <!-- 部門一覧 -->
+      <aside class="panel dashboard-card">
+        <h2 class="panel-title">部門一覧</h2>
+        <p class="panel-description">
+          登録されている部門の一覧です。各部門ごとにドキュメントを紐づけて管理します。
+        </p>
+        <ul class="dept-list">
           {% for dept in department_list %}
-            <li>{{ dept.name }}</li>
+            <li class="dept-list-item">
+              <span class="dept-badge">{{ dept.name }}</span>
+            </li>
           {% empty %}
-            <li>部門が登録されていません。</li>
+            <li class="dept-list-item dept-list-item--empty">
+              部門が登録されていません。
+            </li>
           {% endfor %}
         </ul>
       </aside>
     </div>
 
     <!-- 2段目：アップロード履歴 -->
-    <section class="card">
-      <h2>ドキュメントアップ履歴</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>アップロード日時</th>
-            <th>ファイル名</th>
-            <th>部門</th>
-            <th>アップロード者</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for doc in document_list %}
+    <section class="panel">
+      <h2 class="panel-title">ドキュメントアップロード履歴</h2>
+      <p class="panel-description">
+        全部門のアップロード履歴です。新しい順に表示しています。
+      </p>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
             <tr>
-              <td>{{ doc.created_at }}</td>
-              <td>{{ doc.title }}</td>
-              <td>{{ doc.department.name }}</td>
-              <td>{{ doc.uploaded_by.username }}</td>
+              <th>アップロード日時</th>
+              <th>ファイル名</th>
+              <th>部門</th>
+              <th>アップロード者</th>
             </tr>
-          {% empty %}
-            <tr>
-              <td colspan="4">アップロード履歴はまだありません。</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for doc in document_list %}
+              <tr>
+                <td>{{ doc.created_at }}</td>
+                <td>{{ doc.title }}</td>
+                <td>{{ doc.department.name }}</td>
+                <td>{{ doc.uploaded_by.username }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="table-empty">
+                  アップロード履歴はまだありません。
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
 
-    <!-- 3段目：ドキュメント一覧（自部門のみ・削除可能） -->
-    <section class="card">
-      <h2>ドキュメント一覧（自部門だけ表示）</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ファイル名</th>
-            <th>ページ数</th>
-            <th>作成日時</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for doc in document_list %}
+    <!-- 3段目：自部門ドキュメント一覧 -->
+    <section class="panel">
+      <h2 class="panel-title">自部門のドキュメント一覧</h2>
+      <p class="panel-description">
+        あなたの所属部門に紐づくドキュメントのみ表示されます。不要になったドキュメントは削除できます。
+      </p>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
             <tr>
-              <td>{{ doc.title }}</td>
-              <td>{{ doc.num_page }}</td>
-              <td>{{ doc.created_at }}</td>
-              <td>
-                <form method="post" action="{% url 'documents:delete_document' doc.id %}" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit" onclick="return confirm('削除してよろしいですか？');">削除</button>
-                </form>
-              </td>
+              <th>ファイル名</th>
+              <th>ページ数</th>
+              <th>作成日時</th>
+              <th class="col-actions">操作</th>
             </tr>
-          {% empty %}
-            <tr>
-              <td colspan="5">自部門のドキュメントはまだ登録されていません。</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for doc in document_list %}
+              <tr>
+                <td>{{ doc.title }}</td>
+                <td>{{ doc.num_page }}</td>
+                <td>{{ doc.created_at }}</td>
+                <td class="col-actions">
+                  <form method="post" action="{% url 'documents:delete_document' doc.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="danger-button"
+                            onclick="return confirm('削除してよろしいですか？');">
+                      削除
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="table-empty">
+                  自部門のドキュメントはまだ登録されていません。
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
+
   </main>
 
 </div>
