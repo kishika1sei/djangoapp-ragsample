@@ -1,26 +1,58 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8">
+  <title>ログイン | 社内問合せアプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{% static 'style.css' %}?v=2">
 </head>
-<body>
-    <main class="form-signin w-100 m-auto">
-  <form method="post">
-    {% csrf_token %}
-    <h2 class="h3 mb-3 fw-normal">ログインしてください</h2>
-    <p>{{ error }}</p>
-    <div class="form-floating">
-      <input type="text" name="username" class="form-control" id="floatingInput" placeholder="ユーザ名" >
-      <label for="floatingInput">ユーザ名</label>
-    </div>
-    <div class="form-floating">
-      <input type="password" name="password" class="form-control" id="floatingPassword" placeholder="パスワード">
-      <label for="floatingPassword">パスワード</label>
-    </div>
-    <button class="btn btn-primary w-100 py-2" type="submit">ログイン</button>
-  </form>
-</main>
+<body class="auth-body">
+<div class="auth-layout">
+
+  <div class="auth-card">
+    <header class="auth-header">
+      <h1 class="auth-title">社内問合せアプリ</h1>
+      <p class="auth-subtitle">管理者 / 部門担当者向けログイン</p>
+    </header>
+
+    {% if error %}
+      <div class="auth-error">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="post" class="auth-form">
+      {% csrf_token %}
+
+      <div class="auth-field">
+        <label for="username" class="auth-label">ユーザ名</label>
+        <input type="text"
+               id="username"
+               name="username"
+               class="auth-input"
+               placeholder="例）taro.sato">
+      </div>
+
+      <div class="auth-field">
+        <label for="password" class="auth-label">パスワード</label>
+        <input type="password"
+               id="password"
+               name="password"
+               class="auth-input"
+               placeholder="パスワードを入力してください">
+      </div>
+
+      <button type="submit" class="primary-button auth-submit">
+        ログイン
+      </button>
+    </form>
+
+    <p class="auth-footer-note">
+      一般利用者はログイン不要です。チャット画面からそのままご利用いただけます。
+    </p>
+  </div>
+
+</div>
 </body>
 </html>
