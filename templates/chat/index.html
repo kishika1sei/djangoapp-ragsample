@@ -1,232 +1,117 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <title>社内問合せアプリ</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #fafafa;
-    }
-
-    .chat-wrapper {
-      max-width: 1200px;
-      margin: 20px auto;
-      padding: 16px;
-      border: 1px solid #ccc;
-      background-color: #fff;
-      box-sizing: border-box;
-    }
-
-    .chat-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .chat-title {
-      padding: 8px 16px;
-      border: 1px solid #333;
-      font-weight: bold;
-    }
-
-    .chat-admin-link {
-      padding: 8px 16px;
-      border: 1px solid #333;
-      font-size: 14px;
-      text-align: center;
-    }
-
-    .chat-admin-link a {
-      text-decoration: none;
-      color: #333;
-    }
-
-    .chat-main {
-      display: grid;
-      grid-template-columns: 220px 1fr 220px;
-      gap: 16px;
-      min-height: 480px;
-    }
-
-    /* 左ペイン */
-    .chat-side-left {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .box {
-      border: 1px solid #333;
-      padding: 8px;
-      box-sizing: border-box;
-      background-color: #fff;
-      font-size: 14px;
-    }
-
-    .answer-dept h2 {
-      margin: 0 0 4px;
-      font-size: 16px;
-    }
-
-    .answer-dept p {
-      margin: 0;
-    }
-
-    /* 中央ペイン（メッセージ＋入力欄） */
-    .chat-center {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .messages-area {
-      border: 1px solid #333;
-      padding: 8px;
-      box-sizing: border-box;
-      min-height: 320px;
-      background-color: #fff;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      overflow-y: auto;
-    }
-
-    .message {
-      padding: 6px 8px;
-      border: 1px solid #999;
-      max-width: 70%;
-      font-size: 14px;
-    }
-
-    .message.assistant {
-      align-self: flex-start;
-    }
-
-    .message.user {
-      align-self: flex-end;
-    }
-
-    .chat-input-area {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
-    }
-
-    .chat-input-area textarea {
-      flex: 1;
-      resize: vertical;
-      padding: 8px;
-      border: 1px solid #333;
-      box-sizing: border-box;
-      font-size: 14px;
-    }
-
-    .chat-input-area button {
-      padding: 0 16px;
-      border: 1px solid #333;
-      background-color: #f5f5f5;
-      cursor: pointer;
-      font-size: 14px;
-      white-space: nowrap;
-    }
-
-    /* 右ペイン（管理リンク＋PDF表示エリア想定） */
-    .chat-side-right {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .preview-header {
-      border: 1px solid #333;
-      padding: 8px;
-      text-align: center;
-      font-size: 14px;
-    }
-
-    .preview-body {
-      border: 1px solid #333;
-      padding: 8px;
-      font-size: 13px;
-      line-height: 1.6;
-      min-height: 260px;
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'style.css' %}?v=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<div class="chat-wrapper">
-
-  <div class="chat-header">
-    <div class="chat-title">
-      アプリタイトル：社内問合せアプリ
+<div class="chat-page">
+  <!-- ヘッダー -->
+  <header class="chat-header">
+    <div class="chat-header-left">
+      <h1 class="app-title">社内問合せアプリ</h1>
+      <p class="app-subtitle">
+        人事・総務・経理・法務・情シスへの問い合わせを一元管理する社内向けチャットボットです。
+      </p>
     </div>
-    <div class="chat-admin-link">
-      {% if user.is_authenticated %}
-        <a href="{% url 'documents:dashboard' %}">管理画面はコチラ</a><br>
-        （{{ user.username }} さんでログイン中）
-      {% else %}
-        <a href="{% url 'accounts:login' %}?next={% url 'documents:dashboard' %}">
-          管理画面はコチラ（ログイン画面に遷移）
-        </a>
-      {% endif %} 
+    <div class="chat-header-right">
+      <div class="chat-admin-link">
+        {% if user.is_authenticated %}
+          <span class="login-user">ログイン中：{{ user.username }} さん</span>
+          <a class="admin-button" href="{% url 'documents:dashboard' %}">
+            管理画面へ
+          </a>
+          <form method="post" action="{% url 'chat:reset' %}">
+            {% csrf_token %}
+            <button type="submit">会話をリセット</button>
+          </form>
+        {% else %}
+          <span class="login-user login-user--guest">未ログイン</span>
+          <a class="admin-button" href="{% url 'accounts:login' %}?next={% url 'documents:dashboard' %}">
+            管理画面ログイン
+          </a>
+        {% endif %}
+      </div>
     </div>
-  </div>
+  </header>
 
-  <div class="chat-main">
-    <!-- 左サイド：回答部門／履歴 -->
+  <!-- メインエリア -->
+  <main class="chat-main">
+
+    <!-- 左サイド：回答部門／拡張枠 -->
     <aside class="chat-side-left">
-      <div class="box answer-dept">
-        <h2>回答部門</h2>
-        <p>{{ answer_department|default:"部門名" }}</p>
-      </div>
+      <section class="panel">
+        <h2 class="panel-title">回答部門</h2>
+        <p class="panel-body dept-name">
+          {{ meta|default:"部門名" }}
+        </p>
+      </section>
 
-      <div class="box">
-        ※拡張案<br>
-        会話履歴一覧などを入れることができます。
-      </div>
+      <section class="panel">
+        <h2 class="panel-title">拡張エリア（例）</h2>
+        <div class="panel-body">
+          会話履歴一覧や、「担当部門別の問い合わせ件数」などを表示するエリアとして利用できます。
+        </div>
+      </section>
     </aside>
 
     <!-- 中央：メッセージエリア＋入力欄 -->
     <section class="chat-center">
-      <div class="messages-area">
-        {# ここは実装時にはメッセージ一覧をループで表示する想定 #}
+      <div class="messages-area" id="messages">
         {% for message in messages %}
-          <div class="message {% if message.role == 'assistant' %}assistant{% else %}user{% endif %}">
-            {{ message.content }}
+          <div class="message-row {% if message.role == 'assistant' %}is-assistant{% else %}is-user{% endif %}">
+            <div class="message-bubble">
+              {{ message.content }}
+            </div>
           </div>
         {% empty %}
-          <div class="message assistant">
-            AIアシスタントメッセージがここに表示されます。
+          <div class="message-row is-assistant">
+            <div class="message-bubble">
+              AIアシスタントからの回答がここに表示されます。
+            </div>
           </div>
-          <div class="message user">
-            ユーザメッセージがここに表示されます。
+          <div class="message-row is-user">
+            <div class="message-bubble">
+              あなたの問い合わせ内容がここに表示されます。
+            </div>
           </div>
         {% endfor %}
       </div>
 
       <form method="post" class="chat-input-area">
         {% csrf_token %}
-        <textarea name="message" rows="3" placeholder="問い合わせ内容を入力してください…"></textarea>
-        <button type="submit">送信</button>
+        <label class="input-label" for="message-input">
+          問い合わせ内容
+        </label>
+        <div class="input-row">
+          <textarea id="message-input" name="message" rows="3"
+                    placeholder="例）4月入社の新卒社員の有給休暇付与日を教えてください。"></textarea>
+          <button type="submit" class="submit-button">送信</button>
+        </div>
+        <p class="input-hint">
+          Shift + Enter で改行できます。
+        </p>
       </form>
     </section>
 
     <!-- 右サイド：出典表示エリア等 -->
     <aside class="chat-side-right">
-      <div class="preview-header">
-        出典／資料表示エリア
-      </div>
-      <div class="preview-body">
-        ※拡張案<br>
-        出典の参照機能として PDF などの元画像をここに表示させることもできます。
-        {# 実装時にはここにPDFプレビューやサムネイルなどを表示 #}
-      </div>
+      <section class="panel">
+        <h2 class="panel-title">出典／資料表示エリア</h2>
+        <div class="panel-body">
+          回答に利用した PDF や社内規程の抜粋をここに表示する想定です。<br>
+          例：<br>
+          ・就業規則 PDF のプレビュー<br>
+          ・経費精算マニュアルの該当ページ<br>
+          ・問い合わせに紐づくドキュメント一覧 など
+        </div>
+      </section>
     </aside>
-  </div>
+
+  </main>
 
 </div>
 </body>

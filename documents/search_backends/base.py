@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, TypedDict
-
-class SearchResult(TypedDict):
-    chunk_id: int
+from typing import Sequence
+from dataclasses import dataclass
+from documents.models import Chunk
+@dataclass
+class SearchResult:
+    chunk: Chunk
     score: float
 
 class SearchBackend(ABC):
