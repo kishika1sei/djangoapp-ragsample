@@ -13,6 +13,7 @@ class ChatSession(models.Model):
     title = models.CharField("タイトル",max_length=30,blank=True)
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
+    ended_at = models.DateTimeField("終了日時", null=True, blank=True)
 
     class Meta:
         verbose_name = "チャットセッション"
@@ -36,6 +37,20 @@ class ChatMessage(models.Model):
     role = models.CharField("ロール",max_length=20, choices=Role.choices)
     content = models.TextField("内容")
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
+
+    routing_meta = models.JSONField(
+        "ルーティングメタデータ",
+        null=True,
+        blank=True,
+        help_text="LLMルーティング結果(is_business等)をJSONで保存",
+    )
+
+    retrieval_meta = models.JSONField(
+        "検索メタデータ",
+        null=True,
+        blank=True,
+        help_text="検索スコアやフォールバック状況等をJSONで保存",
+    )
 
     class Meta:
         verbose_name = "チャットメッセージ"

@@ -4,9 +4,9 @@ from typing import Sequence
 import faiss
 import numpy as np
 
-from .base import SearchBackend, SearchResult  # あなたの ABC を置いている場所
+from .base import SearchBackend, SearchResult  #ABC を置いている場所
 from documents.models import Chunk
-from documents.services.embedding_service import EmbeddingService  # さっきのクラス
+from documents.services.embedding_service import EmbeddingService
 
 class FaissSearchBackend(SearchBackend):
     def __init__(
@@ -137,62 +137,71 @@ class FaissSearchBackend(SearchBackend):
         self,
         query_embedding: list[float],
         top_k: int = 5,
-        filters: dict | None = None,  # department_id など
+        filters: dict | None = None,
     ) -> list[SearchResult]:
-        """類似チャンク検索"""
+        """
+        類似チャンク検索を行う関数です。
+        filterの仕様:部門フィルタがあるときは候補を多めにとる。
+        """
         if self.index.ntotal == 0:
-            return[]
+            return []
         
         xq = np.array([query_embedding], dtype="float32")
 
-        # 絞り込みがあることを考えて、少し多めにとる
-        search_k = top_k * 5
-        # 上位５件を取り出す
-        D, I = self.index.search(xq, search_k)
-        
-        # Dは類似度スコア配列、IはID配列(各クエリに対する候補IDの配列)[0]で最上位のものだけを取り出す。
-        ids = I[0]
-        scores = D[0]
-
-        # ヒットしない部分の -1を除外
-        valid_ids: list[int] = [int(i) for i in ids if i != -1]
-        if not valid_ids:
-            return []
-        
-        # 対応するChunkを取得
-        chunks = list(
-            Chunk.objects.filter(id__in=valid_ids)
-            .select_related("document__department")
-        )
-        chunk_by_id = {c.id: c for c in chunks}
-
+        # filter解釈
         department_id = None
+        department_code = None
         if filters:
             department_id = filters.get("department_id")
+            department_code = filters.get("department_code")
+        # 部門フィルタがあるときは候補を多めにとれるようにする
+        # 段階的に search_kを増やして、top_kが集まったら止める
+        max_k = min(int(self.index.ntotal), top_k * 50) 
+        search_k = min(max_k, top_k * 5)
 
         results: list[SearchResult] = []
 
-        for chunk_id, score in zip(ids, scores):
-            if chunk_id == -1:
-                continue
+        while True:
+            # 上位５件を取り出す
+            D, I = self.index.search(xq, search_k)
+            
+            # Dは類似度スコア配列、IはID配列(各クエリに対する候補IDの配列)[0]で最上位のものだけを取り出す。
+            ids = I[0]
+            scores = D[0]
 
-            cid = int(chunk_id)
-            chunk = chunk_by_id.get(cid)
-            if chunk is None:
-                continue
-
-            # 部門フィルタ
+            # ヒットしない部分の -1を除外
+            valid_ids: list[int] = [int(i) for i in ids if i != -1]
+            if not valid_ids:
+                return []
+        
+            # DB側でフィルタして取得
+            qs = Chunk.objects.filter(id__in=valid_ids).select_related("document__department")
             if department_id is not None:
-                if chunk.document.department_id != department_id:
+                qs = qs.filter(document__department_id=department_id)
+            if department_code is not None:
+                qs = qs.filter(document__department__code=department_code)
+
+            chunks = list(qs)
+            chunk_by_id = {c.id: c for c in chunks}
+
+            results: list[SearchResult] = []
+            for chunk_id, score in zip(ids, scores):
+                if chunk_id == -1:
                     continue
 
-            results.append(
-                {
-                    "chunk_id": cid,
-                    "score": float(score),
-                }
-            )
-            if len(results) >= top_k:
-                break
+                cid = int(chunk_id)
+                chunk = chunk_by_id.get(cid)
+                if chunk is None:
+                    continue
 
-        return results
+                results.append(SearchResult(chunk=chunk, score=float(score)))
+                if len(results) >= top_k:
+                    return results
+
+            # ここまで来た = top_k 集まらない
+            if search_k >= max_k:
+                # 取れるだけ返す
+                return results
+
+            # search_k を増やして再トライ
+            search_k = min(max_k, search_k * 2)

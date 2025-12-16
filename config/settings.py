@@ -13,6 +13,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 STATICFILES_DIRS = [str(BASE_DIR / 'static')]
 
+# FAISS のインデックスファイルのパス
+FAISS_INDEX_PATH = BASE_DIR / "var" / "faiss" / "chunks.index"
+
 # ファイルのアップロード先
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

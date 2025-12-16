@@ -24,6 +24,10 @@
           <a class="admin-button" href="{% url 'documents:dashboard' %}">
             管理画面へ
           </a>
+          <form method="post" action="{% url 'chat:reset' %}">
+            {% csrf_token %}
+            <button type="submit">会話をリセット</button>
+          </form>
         {% else %}
           <span class="login-user login-user--guest">未ログイン</span>
           <a class="admin-button" href="{% url 'accounts:login' %}?next={% url 'documents:dashboard' %}">
@@ -42,7 +46,7 @@
       <section class="panel">
         <h2 class="panel-title">回答部門</h2>
         <p class="panel-body dept-name">
-          {{ answer_department|default:"部門名" }}
+          {{ meta|default:"部門名" }}
         </p>
       </section>
 
