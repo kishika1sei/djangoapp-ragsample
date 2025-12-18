@@ -33,11 +33,11 @@ def dashboard(request):
     else:
         #のドキュメント一覧情報を取得して表示する
         form = DocumentUploadForm()
-
-    document_list = Document.objects.filter(department=request.user.department)
+    upload_list = Document.objects.all()
+    my_dept_list = Document.objects.filter(department=request.user.department)
     department_list = Department.objects.all()
     # POSTの場合は、ファイルを保存してからドキュメント一覧情報を取得して表示する
-    return render(request, 'documents/dashboard.html', {'document_list': document_list, 'department_list': department_list,'form':form})
+    return render(request, 'documents/dashboard.html', {'upload_list': upload_list, 'my_dept_list': my_dept_list, 'department_list': department_list,'form':form})
 
 @login_required
 @require_POST
