@@ -3,7 +3,6 @@ from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 
 from accounts.models import Department
-# Create your models here.
 
 class Document(models.Model):
     title = models.CharField("タイトル(アップロード時のファイル名)", max_length=255)

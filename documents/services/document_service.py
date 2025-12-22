@@ -7,7 +7,7 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.conf import settings
 
-from documents.models import Document, AuditLog, Chunk
+from documents.models import Document, AuditLog
 from documents.services.document_ingestion import DocumentIngestionService, IngestionResult
 from documents.search_backends.faiss_backend import FaissSearchBackend
 
