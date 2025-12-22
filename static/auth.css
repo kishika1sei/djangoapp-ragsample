@@ -1,0 +1,103 @@
+/* =========================
+   auth.css (accounts/login.html)
+   ========================= */
+
+.auth-body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, #e0f2fe, transparent 60%),
+    radial-gradient(circle at bottom right, #ede9fe, transparent 55%),
+    #f3f4f6;
+}
+
+.auth-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.15);
+  padding: 24px 22px 22px;
+}
+
+.auth-header {
+  margin-bottom: 16px;
+}
+
+.auth-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  text-align: center;
+}
+
+.auth-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.auth-error {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  border: 1px solid #fecaca;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.auth-input {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.3);
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.auth-footer-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}

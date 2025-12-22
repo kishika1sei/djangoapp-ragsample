@@ -1,12 +1,17 @@
 from pathlib import Path
 from typing import Sequence
-
+import os
+import threading
 import faiss
 import numpy as np
+import logging
 
-from .base import SearchBackend, SearchResult  #ABC を置いている場所
+from .base import SearchBackend, SearchResult
 from documents.models import Chunk
 from documents.services.embedding_service import EmbeddingService
+
+logger = logging.getLogger(__name__)
+
 
 class FaissSearchBackend(SearchBackend):
     def __init__(
@@ -18,105 +23,150 @@ class FaissSearchBackend(SearchBackend):
         self.index_path = Path(index_path)
         self.embedding_service = embedding_service or EmbeddingService()
 
-        # dimension が指定されていなければ、ダミー文字列をベクトル化したものをEmbeddingService から推定
         if dimension is None:
             sample_vec = self.embedding_service.embed_chunks(["__probe__"])[0]
             dimension = len(sample_vec)
 
         self.dimension = dimension
-        self.index = self._load_or_create_index()
+        self._lock = threading.RLock()
 
-    # --- インデックス生成周り ---
+        self.index = self._load_or_create_index()
+        self._index_mtime = self._get_file_mtime_or_none()
+
+    # --- index file helpers ---
+
+    def _get_file_mtime_or_none(self) -> float | None:
+        try:
+            if self.index_path.exists():
+                return self.index_path.stat().st_mtime
+        except OSError:
+            return None
+        return None
+
+    def _maybe_reload_index(self) -> None:
+        """
+        index ファイルが更新されていれば reload する。
+        reload 失敗時は既存 index を維持（サービス継続優先）。
+        """
+        current_mtime = self._get_file_mtime_or_none()
+        if current_mtime is None:
+            return
+
+        # 変更がなければ何もしない
+        if self._index_mtime is not None and current_mtime <= self._index_mtime:
+            return
+
+        try:
+            new_index = faiss.read_index(str(self.index_path))
+            # dimension の整合性チェック
+            d = getattr(new_index, "d", None)
+            if d is not None and int(d) != int(self.dimension):
+                raise RuntimeError(f"FAISS dimension mismatch: file_d={d} expected={self.dimension}")
+
+            self.index = new_index  # type: ignore[assignment]
+            self._index_mtime = current_mtime
+            logger.warning(
+                "faiss:index reloaded path=%s ntotal=%d mtime=%.3f",
+                str(self.index_path), int(self.index.ntotal), current_mtime
+            )
+        except Exception:
+            logger.exception("faiss:index reload failed (keeping existing index) path=%s", str(self.index_path))
+
+    # --- index create/load/save ---
 
     def _create_empty_index(self) -> faiss.IndexIDMap2:
-        """
-        空の IndexIDMap2 を生成する。
-        Chunk.id をそのまま ID に使う前提。
-        """
-        base_index = faiss.IndexFlatIP(self.dimension)  # 内積
-        index = faiss.IndexIDMap2(base_index)
-        return index
+        base_index = faiss.IndexFlatIP(self.dimension)
+        return faiss.IndexIDMap2(base_index)
 
     def _load_or_create_index(self) -> faiss.IndexIDMap2:
-        """
-        既存のインデックスがあれば読み込み、なければ新規作成。
-        """
         if self.index_path.exists():
             index = faiss.read_index(str(self.index_path))
-            # 読み込んだ index が IDMap2 でない場合は注意（ここでは前提として省略）
             return index  # type: ignore[return-value]
-        else:
-            index = self._create_empty_index()
-            self._save_index(index)
-            return index
+        index = self._create_empty_index()
+        self._save_index(index)
+        return index
 
     def _save_index(self, index: faiss.Index | None = None) -> None:
         """
-        インデックスをディスクに保存。
+        atomic write（tmp→replace）
+        読み手が書き込み途中のファイルを掴まないようにする。
         """
         index = index or self.index
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(index, str(self.index_path))
 
-    # ---インデックスの登録---
+        final_path = str(self.index_path)
+        tmp_path = final_path + ".tmp"
+
+        faiss.write_index(index, tmp_path)
+        os.replace(tmp_path, final_path)
+
+        # 保存後のmtimeを保持
+        self._index_mtime = self._get_file_mtime_or_none()
+
+    # --- index mutate ops ---
+
     def index_chunks(self, chunk_ids: Sequence[int]) -> None:
-        """指定された Chunk をインデックスに追加・更新する"""
         chunk_ids = list(chunk_ids)
         if not chunk_ids:
             return
-        
-        # 対象チャンクを登録
-        chunks = list(
-            Chunk.objects.filter(id__in=chunk_ids).select_related("document")
-        )
+
+        chunks = list(Chunk.objects.filter(id__in=chunk_ids).select_related("document"))
         if not chunks:
             return
-        
-        # テキスト & ID 抽出
-        texts: list[str] = [c.content for c in chunks]
-        ids_np = np.array([c.id for c in chunks],dtype="int64")
 
-        # 埋め込み生成
-        embeddings: list[list[float]] = self.embedding_service.embed_chunks(texts)
-        vectors = np.array(embeddings,dtype="float32")
+        texts = [c.content for c in chunks]
+        ids_np = np.array([c.id for c in chunks], dtype="int64")
 
-        # 既存の同一IDがあれば削除(更新に対応するため)
-        try:
-            selector = faiss.IDSelectorBatch(ids_np)
-            self.index.remove_ids(selector)
-        except Exception:
-            # TODO:後でここに例外処理を追加する
-            # 初期状態ではIDがない場合があるので保険をかけておく
-            pass
+        embeddings = self.embedding_service.embed_chunks(texts)
+        vectors = np.array(embeddings, dtype="float32")
+        faiss.normalize_L2(vectors)
 
-        # 新しいベクトルを登録
-        self.index.add_with_ids(vectors,ids_np)
+        with self._lock:
+            # 最新ファイルがあればリロード
+            self._maybe_reload_index()
 
-        # インデックスを保存
-        self._save_index()
-    # ---インデックスの削除---
+            try:
+                selector = faiss.IDSelectorBatch(ids_np)
+                self.index.remove_ids(selector)
+            except Exception:
+                pass
+
+            self.index.add_with_ids(vectors, ids_np)
+            self._save_index()
+
     def delete_chunks(self, chunk_ids: Sequence[int]) -> None:
-        """指定された Chunk をインデックスから削除"""
         chunk_ids = list(chunk_ids)
         if not chunk_ids:
             return
-        
-        ids_np = np.array(chunk_ids,dtype="int64")
-        selector = faiss.IDSelectorBatch(ids_np)
-        self.index.remove_ids(selector)
-        self._save_index()
 
-    # ---インデックスの全再構築---
+        ids_np = np.array(chunk_ids, dtype="int64")
+        selector = faiss.IDSelectorBatch(ids_np)
+
+        with self._lock:
+            self._maybe_reload_index()
+            self.index.remove_ids(selector)
+            self._save_index()
+
     def rebuild_index(self) -> None:
-        """PostgreSQL の Chunk テーブルを元にインデックス全再構築"""
-        # まず空のインデックスを作り直す
-        self.index = self._create_empty_index()
+        """
+        新しい index をローカルで完成させてから swap する。
+        途中状態（ntotal=0）を外に見せない。
+        """
+        total = Chunk.objects.count()
+        logger.warning("faiss:rebuild_index:start chunk_count=%d", total)
+
+        if total == 0:
+            # 空で上書きしてチャンク全滅を防ぐ
+            logger.error("faiss:rebuild_index:aborted chunk_count=0 (skip overwrite)")
+            return
+
+        new_index = self._create_empty_index()
         qs = Chunk.objects.all().order_by("id")
 
         batch_size = 256
         offset = 0
         while True:
-            batch = list(qs[offset : offset + batch_size])
+            batch = list(qs[offset: offset + batch_size])
             if not batch:
                 break
 
@@ -126,82 +176,76 @@ class FaissSearchBackend(SearchBackend):
             embeddings = self.embedding_service.embed_chunks(texts)
             vectors = np.array(embeddings, dtype="float32")
 
-            self.index.add_with_ids(vectors,ids_np)
+            faiss.normalize_L2(vectors)
+            if offset == 0:
+                norms2 = np.linalg.norm(vectors, axis=1)
+                logger.warning(
+                    "faiss:rebuild_index norms(after_norm) mean=%.3f min=%.3f max=%.3f",
+                    float(norms2.mean()), float(norms2.min()), float(norms2.max())
+                )
+            new_index.add_with_ids(vectors, ids_np)
 
             offset += batch_size
-        
-        self._save_index()
 
-    # ---インデックスの検索---
-    def search(
-        self,
-        query_embedding: list[float],
-        top_k: int = 5,
-        filters: dict | None = None,
-    ) -> list[SearchResult]:
-        """
-        類似チャンク検索を行う関数です。
-        filterの仕様:部門フィルタがあるときは候補を多めにとる。
-        """
-        if self.index.ntotal == 0:
-            return []
-        
-        xq = np.array([query_embedding], dtype="float32")
+        with self._lock:
+            # 先に保存（atomic）→ 成功したら swap
+            self._save_index(new_index)
+            self.index = new_index  # type: ignore[assignment]
 
-        # filter解釈
-        department_id = None
-        department_code = None
-        if filters:
-            department_id = filters.get("department_id")
-            department_code = filters.get("department_code")
-        # 部門フィルタがあるときは候補を多めにとれるようにする
-        # 段階的に search_kを増やして、top_kが集まったら止める
-        max_k = min(int(self.index.ntotal), top_k * 50) 
-        search_k = min(max_k, top_k * 5)
+        logger.warning("faiss:rebuild_index:finish ntotal=%d", int(self.index.ntotal))
 
-        results: list[SearchResult] = []
+    def search(self, query_embedding: list[float], top_k: int = 5, filters: dict | None = None) -> list[SearchResult]:
+        with self._lock:
+            # ファイル更新に追従
+            self._maybe_reload_index()
 
-        while True:
-            # 上位５件を取り出す
-            D, I = self.index.search(xq, search_k)
-            
-            # Dは類似度スコア配列、IはID配列(各クエリに対する候補IDの配列)[0]で最上位のものだけを取り出す。
-            ids = I[0]
-            scores = D[0]
-
-            # ヒットしない部分の -1を除外
-            valid_ids: list[int] = [int(i) for i in ids if i != -1]
-            if not valid_ids:
+            if self.index.ntotal == 0:
                 return []
-        
-            # DB側でフィルタして取得
-            qs = Chunk.objects.filter(id__in=valid_ids).select_related("document__department")
-            if department_id is not None:
-                qs = qs.filter(document__department_id=department_id)
-            if department_code is not None:
-                qs = qs.filter(document__department__code=department_code)
 
-            chunks = list(qs)
-            chunk_by_id = {c.id: c for c in chunks}
+            xq = np.array([query_embedding], dtype="float32")
+            faiss.normalize_L2(xq)
 
-            results: list[SearchResult] = []
-            for chunk_id, score in zip(ids, scores):
-                if chunk_id == -1:
-                    continue
+            # filter / search_k ロジック
+            department_id = None
+            department_code = None
+            if filters:
+                department_id = filters.get("department_id")
+                department_code = filters.get("department_code")
 
-                cid = int(chunk_id)
-                chunk = chunk_by_id.get(cid)
-                if chunk is None:
-                    continue
+            max_k = min(int(self.index.ntotal), top_k * 50)
+            search_k = min(max_k, top_k * 5)
 
-                results.append(SearchResult(chunk=chunk, score=float(score)))
-                if len(results) >= top_k:
+            while True:
+                D, I = self.index.search(xq, search_k)
+                ids = I[0]
+                scores = D[0]
+
+                valid_ids = [int(i) for i in ids if i != -1]
+                if not valid_ids:
+                    return []
+
+                qs = Chunk.objects.filter(id__in=valid_ids).select_related("document__department")
+                if department_id is not None:
+                    qs = qs.filter(document__department_id=department_id)
+                if department_code is not None:
+                    qs = qs.filter(document__department__code=department_code)
+
+                chunks = list(qs)
+                chunk_by_id = {c.id: c for c in chunks}
+
+                results: list[SearchResult] = []
+                for chunk_id, score in zip(ids, scores):
+                    if chunk_id == -1:
+                        continue
+                    cid = int(chunk_id)
+                    chunk = chunk_by_id.get(cid)
+                    if chunk is None:
+                        continue
+                    results.append(SearchResult(chunk=chunk, score=float(score)))
+                    if len(results) >= top_k:
+                        return results
+
+                if search_k >= max_k:
                     return results
 
-            # ここまで来た = top_k 集まらない
-            if search_k >= max_k:
-                # 取れるだけ返す
-                return results
-
-            # search_k を増やして再トライ
-            search_k = min(max_k, search_k * 2)
+                search_k = min(max_k, search_k * 2)
