@@ -27,7 +27,7 @@
           </a>
           <form method="post" action="{% url 'chat:reset' %}">
             {% csrf_token %}
-            <button type="submit">会話をリセット</button>
+            <button type="submit" class="danger-button">会話をリセット</button>
           </form>
         {% else %}
           <span class="login-user login-user--guest">未ログイン</span>
@@ -46,8 +46,8 @@
     <aside class="chat-side-left">
       <section class="panel">
         <h2 class="panel-title">回答部門</h2>
-        <p class="panel-body dept-name">
-          {{ meta|default:"部門名" }}
+        <p class="panel-body dept-name" id="answer-department">
+          {{ answer_department|default:"部門名" }}
         </p>
       </section>
 
@@ -69,6 +69,7 @@
             </div>
           </div>
         {% empty %}
+          <div id="messages-empty">
           <div class="message-row is-assistant">
             <div class="message-bubble">
               AIアシスタントからの回答がここに表示されます。
@@ -79,6 +80,7 @@
               あなたの問い合わせ内容がここに表示されます。
             </div>
           </div>
+        </div>
         {% endfor %}
       </div>
 
@@ -101,13 +103,34 @@
     <!-- 右サイド：出典表示エリア等 -->
     <aside class="chat-side-right">
       <section class="panel">
-        <h2 class="panel-title">出典／資料表示エリア</h2>
+        <h2 class="panel-title">出典／資料</h2>
         <div class="panel-body">
-          回答に利用した PDF や社内規程の抜粋をここに表示する想定です。<br>
-          例：<br>
-          ・就業規則 PDF のプレビュー<br>
-          ・経費精算マニュアルの該当ページ<br>
-          ・問い合わせに紐づくドキュメント一覧 など
+          <div id="citations">
+            {% if initial_citations and initial_citations|length > 0 %}
+              <ul class="citations-list">
+                {% for c in initial_citations %}
+                  <li class="citation-item">
+                    <div class="citation-title">{{ c.title }}</div>
+                    <div class="citation-locator">
+                      {% if c.locator.type == "page_set" %}
+                        p.{% for p in c.locator.pages %}{{ p }}{% if not forloop.last %},{% endif %}{% endfor %}
+                      {% else %}
+                        chunk #{% for ch in c.locator.chunks %}{{ ch }}{% if not forloop.last %},{% endif %}{% endfor %}
+                      {% endif %}
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div class="citations-empty">出典なし</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panel-title">拡張エリア（例）</h2>
+        <div class="panel-body">
+          PDFビューアーを挿入して、該当ページを描画させることも可能です。
         </div>
       </section>
     </aside>
@@ -115,5 +138,197 @@
   </main>
 
 </div>
+<script>
+(function () {
+  const form = document.querySelector("form.chat-input-area");
+  const textarea = document.getElementById("message-input");
+  const messagesEl = document.getElementById("messages");
+
+  if (!form || !textarea || !messagesEl) return;
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function createMessageRow(role, contentHtml) {
+    const row = document.createElement("div");
+    row.className = "message-row " + (role === "assistant" ? "is-assistant" : "is-user");
+
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+    bubble.innerHTML = contentHtml;
+
+    row.appendChild(bubble);
+    return row;
+  }
+
+  function createTypingRow() {
+    const row = document.createElement("div");
+    row.className = "message-row is-assistant";
+    row.id = "typing-indicator-row";
+
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble typing-bubble";
+    bubble.innerHTML = `
+      <span class="typing-dots" aria-label="AIが入力中">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </span>
+    `;
+
+    row.appendChild(bubble);
+    return row;
+  }
+
+  function getCsrfToken() {
+    // cookie から csrftoken を取得（Django標準）
+    const name = "csrftoken=";
+    const cookies = document.cookie.split(";").map(v => v.trim());
+    for (const c of cookies) {
+      if (c.startsWith(name)) return c.substring(name.length);
+    }
+    return "";
+  }
+
+  async function sendMessage() {
+    const text = textarea.value;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const empty = document.getElementById("messages-empty");
+    if (empty) empty.remove();
+    // ユーザの吹き出しを即時反映（体感改善）
+    messagesEl.appendChild(createMessageRow("user", escapeHtml(text).replace(/\n/g, "<br>")));
+    scrollToBottom();
+
+    // 入力クリア（Shift+Enterで改行はそのまま。送信後はクリア）
+    textarea.value = "";
+
+    // タイピングインジケータ表示
+    const typingRow = createTypingRow();
+    messagesEl.appendChild(typingRow);
+    scrollToBottom();
+
+    // 二重送信抑止
+    const submitBtn = form.querySelector("button[type='submit']");
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const fd = new FormData(form);
+      fd.set("message", text); // 念のため上書き
+
+      const res = await fetch(window.location.href, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: fd,
+      });
+
+      if (!res.ok) {
+        throw new Error("HTTP " + res.status);
+      }
+
+      const data = await res.json();
+
+      // タイピング消す
+      const t = document.getElementById("typing-indicator-row");
+      if (t) t.remove();
+
+      // アシスタント吹き出し追加
+      const assistantHtml = escapeHtml(data.assistant || "").replace(/\n/g, "<br>");
+      messagesEl.appendChild(createMessageRow("assistant", assistantHtml));
+      scrollToBottom();
+
+      // 左ペインの部門表示を更新（answer_department が返る）
+      if (Object.prototype.hasOwnProperty.call(data, "answer_department")) {
+        const deptEl = document.getElementById("answer-department") || document.querySelector(".dept-name");
+        if (deptEl && data.answer_department) {
+          deptEl.textContent = data.answer_department;
+        }
+        // metaに部門が無い場合は更新せずに前回表示維持する
+      }
+      // 右ペインの出典を更新（meta.citations）
+      const citations = (data && data.meta && Array.isArray(data.meta.citations)) ? data.meta.citations : [];
+      renderCitations(citations);
+
+    } catch (e) {
+      // タイピング消す
+      const t = document.getElementById("typing-indicator-row");
+      if (t) t.remove();
+
+      messagesEl.appendChild(
+        createMessageRow("assistant", "エラーが発生しました。時間をおいて再度お試しください。")
+      );
+      scrollToBottom();
+      console.error(e);
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      textarea.focus();
+    }
+  }
+
+  // Ctrl+Enter 送信、Shift+Enter 改行（デフォルト改行）
+  textarea.addEventListener("keydown", function (e) {
+    const isSend = (e.key === "Enter") && (e.ctrlKey || e.metaKey);
+    if (isSend) {
+      e.preventDefault();
+      sendMessage();
+    }
+    // Shift+Enter は改行のまま（何もしない）
+  });
+
+  // 通常のボタン送信もAJAX化
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    sendMessage();
+  });
+
+  // HTMLエスケープ（XSS対策）
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function formatLocator(locator) {
+  if (!locator || !locator.type) return "";
+  if (locator.type === "page_set") {
+    const pages = Array.isArray(locator.pages) ? locator.pages : [];
+    return pages.length ? ("p." + pages.join(",")) : "";
+  }
+  if (locator.type === "chunk_set") {
+    const chunks = Array.isArray(locator.chunks) ? locator.chunks : [];
+    return chunks.length ? ("chunk #" + chunks.join(",")) : "";
+  }
+  return "";
+}
+
+  function renderCitations(citations) {
+    const el = document.getElementById("citations");
+    if (!el) return;
+
+    if (!Array.isArray(citations) || citations.length === 0) {
+      el.innerHTML = '<div class="citations-empty">出典なし</div>';
+      return;
+    }
+
+    const items = citations.map(c => {
+      const title = escapeHtml(c.title || "");
+      const loc = escapeHtml(formatLocator(c.locator));
+      return `
+        <li class="citation-item">
+          <div class="citation-title">${title}</div>
+          <div class="citation-locator">${loc}</div>
+        </li>
+      `;
+    }).join("");
+
+    el.innerHTML = `<ul class="citations-list">${items}</ul>`;
+  }
+
+})();
+</script>
 </body>
 </html>
