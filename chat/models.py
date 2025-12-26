@@ -10,6 +10,13 @@ class ChatSession(models.Model):
         on_delete=models.SET_NULL,
         related_name="chat_sessions",
     )
+    answer_department = models.ForeignKey(
+        "accounts.Department",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chat_sessions",
+        verbose_name="最後に回答した部門",
+    )
     title = models.CharField("タイトル",max_length=30,blank=True)
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
@@ -50,6 +57,14 @@ class ChatMessage(models.Model):
         null=True,
         blank=True,
         help_text="検索スコアやフォールバック状況等をJSONで保存",
+    )
+
+    citations = models.JSONField(
+        "出典(citations)",
+        default=list,
+        blank=True,
+        help_text="RAGが参照したドキュメント情報(document単位で集約)",
+
     )
 
     class Meta:

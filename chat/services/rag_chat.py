@@ -1,6 +1,6 @@
 from chat.models import ChatMessage,ChatSession
 from chat.services.routing_service import RoutingService
-from documents.models import Department
+from accounts.models import Department
 
 
 class RAGChatService:
@@ -113,7 +113,7 @@ class RAGChatService:
             context=context_block,
             user_message=user_message,
         )
-        
+
         # 6. LLMを読んで、回答を生成
         answer_text = self.llm_client.complete(prompt)
 
@@ -123,6 +123,7 @@ class RAGChatService:
             "retrieval":retrieval_meta,
             "used_document_ids": [doc.id for doc in used_documents],
             "num_context_chunks": len(search_results),
+            "citations": self._build_citations(search_results),
         }
 
         return answer_text, meta
@@ -228,4 +229,49 @@ class RAGChatService:
 
         role = roles.get(dept_code, "あなたは総合窓口の担当者です。")
         return f"{base}\n{role}"
+    
+    # 引用構築
+    def _build_citations(self, search_results) -> list[dict]:
+        by_doc: dict[int, dict] = {}
+
+        for r in (search_results or []):
+            chunk = getattr(r, "chunk", None)
+            if chunk is None or chunk.document_id is None:
+                continue
+
+            doc_id = int(chunk.document_id)
+            doc = chunk.document
+
+            if doc_id not in by_doc:
+                by_doc[doc_id] = {
+                    "document_id": doc_id,
+                    "title": (getattr(doc, "title", "") or f"Document#{doc_id}"),
+                    "has_page": False,
+                    "pages": set(),
+                    "chunks": set(),
+                }
+
+            if chunk.page is not None:
+                by_doc[doc_id]["has_page"] = True
+                by_doc[doc_id]["pages"].add(int(chunk.page))
+            else:
+                if chunk.chunk_index is not None:
+                    # ingestionは0-basedなので、表示は1-based推奨
+                    by_doc[doc_id]["chunks"].add(int(chunk.chunk_index) + 1)
+
+        citations: list[dict] = []
+        for doc_id, acc in by_doc.items():
+            if acc["has_page"] and acc["pages"]:
+                locator = {"type": "page_set", "pages": sorted(acc["pages"])}
+            else:
+                locator = {"type": "chunk_set", "chunks": sorted(acc["chunks"])}
+
+            citations.append({
+                "document_id": acc["document_id"],
+                "title": acc["title"],
+                "locator": locator,
+            })
+
+        citations.sort(key=lambda x: (x.get("title") or "", x.get("document_id") or 0))
+        return citations
 
