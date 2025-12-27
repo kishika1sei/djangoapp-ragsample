@@ -93,24 +93,38 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-if "DATABASE_URL" in os.environ:
+def strtobool(v: str | None) -> bool:
+    return str(v).lower() in ("1", "true", "yes", "on")
+
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
     # Render本番環境など（DATABASE_URL が設定されている場合はこちらを優先）
     DATABASES = {
         "default": dj_database_url.parse(
-            os.environ["DATABASE_URL"],
-            conn_max_age=600,
+            DATABASE_URL,
+            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "600")),
+            ssl_require=strtobool(os.getenv("DB_SSL_REQUIRE", "false")),
         )
     }
+
+    # health check / connection安定化
+    DATABASES["default"].setdefault("OPTIONS", {})
+    
+    if strtobool(os.getenv("DB_SSL_REQUIRE", "false")):
+        DATABASES["default"]["OPTIONS"].setdefault("sslmode", os.getenv("DB_SSLMODE", "require"))
+
 else:
-    # ローカル開発用：DockerのPostgreSQLを想定
+    # ローカル開発用：DockerのPostgreSQL
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("POSTGRES_DB", "ragdb"),
-            "USER": os.environ.get("POSTGRES_USER", "raguser"),
-            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "NAME": os.getenv("POSTGRES_DB", "ragdb"),
+            "USER": os.getenv("POSTGRES_USER", "raguser"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
         }
     }
 
