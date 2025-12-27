@@ -9,3 +9,4 @@ langchain-openai==1.0.0
 faiss-cpu
 numpy
 gunicorn==21.2.0
+whitenoise==6.7.0

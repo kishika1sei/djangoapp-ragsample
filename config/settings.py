@@ -12,6 +12,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 STATICFILES_DIRS = [str(BASE_DIR / 'static')]
+STATIC_URL = 'static/'
+# Renderなど本番環境用
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # FAISS のインデックスファイルのパス
 FAISS_INDEX_PATH = BASE_DIR / "var" / "faiss" / "chunks.index"
@@ -24,10 +27,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-msjv83i+1)8x+8wl@d1a17no=$!l$*lp6%$9y^o&8l23$7xukr'
-
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -52,13 +54,14 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -166,7 +169,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
