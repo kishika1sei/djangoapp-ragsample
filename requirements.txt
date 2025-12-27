@@ -8,3 +8,4 @@ langchain-text-splitters
 langchain-openai==1.0.0
 faiss-cpu
 numpy
+gunicorn==21.2.0
