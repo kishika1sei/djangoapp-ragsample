@@ -17,8 +17,9 @@ def index(request):
     if request.method == "POST":
         # 1.チャット内容を受け取る
         user_text = request.POST.get("message", "").strip()
-        # TODO: 会話履歴表示用にタイトル自動生成するならこの辺に追加予定
+        # TODO: 会話履歴表示用にタイトル自動生成するならこの辺に追加予定(オプション)
 
+        # 空メッセージは無視してリダイレクト(フロント側でも空文字は送らない設計だが念のため)
         if not user_text:
             if request.headers.get("x-requested-with") == "XMLHttpRequest":
                 return JsonResponse({"error": "empty_message"}, status=400)
@@ -31,7 +32,7 @@ def index(request):
             content=user_text,
         )
         # 3.結果をRAGServiceに「このセッションでチャットして」と依頼
-            # 1.FAISSにクエリを渡して検索を依頼し、LLMも呼び出す
+        # 1.FAISSにクエリを渡して検索を依頼し、LLMも呼び出す
         try:
             answer, meta = rag_service.chat(session=session,user_message=user_text)
         except Exception:
