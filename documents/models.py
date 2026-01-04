@@ -84,7 +84,7 @@ class AuditLog(models.Model):
         related_name="audit_logs",
     )
 
-    # 対象はまず Document に限定（必要になったら後で汎用化）
+    # 操作対象は Document に限定（必要になったら後で拡張、汎用化）
     document = models.ForeignKey(
         Document,
         verbose_name="対象ドキュメント",
@@ -94,7 +94,7 @@ class AuditLog(models.Model):
         related_name="audit_logs",
     )
 
-    # 操作時点の部門の証跡（後で Document が消えても追える）
+    # 操作時点の部門の証跡（誰が削除したかを追えるように）
     department = models.ForeignKey(
         Department,
         verbose_name="部門",
