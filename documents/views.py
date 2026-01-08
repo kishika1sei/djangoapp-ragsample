@@ -15,7 +15,7 @@ def dashboard(request):
     if request.method == "POST":
         form = DocumentUploadForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
-            files = form.cleaned_data["files"]  # ← ここがリストになる
+            files = form.cleaned_data["files"]
 
             if request.user.is_superuser:
                 dept = form.cleaned_data.get("department") or request.user.department
