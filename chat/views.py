@@ -1,3 +1,5 @@
+import json
+from django.utils import timezone
 from django.shortcuts import render,redirect
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
@@ -73,8 +75,8 @@ def index(request):
                 "assistant": answer,
                 "meta": meta, # meta肥大化するなら将来はused_document_idsを返すだけ等調整する
                 "answer_department": display_answer_department(session),  # 日本語名
-                # 必要ならコードも返せる
-                # "answer_department_code": session.answer_department.code if session.answer_department else None,
+                "assistant_message_id": assistant_msg.id,
+                "assistant_rating": assistant_msg.rating, 
             })
         # POST-redirect-GET パターンで再読み込み時の二重送信を防ぐ
         return redirect("chat:index")
@@ -107,6 +109,45 @@ def reset_view(request):
     ChatSessionService.reset_session(request)
     return redirect("chat:index")
 
+@require_POST
+def submit_rating(request):
+    """
+    payload: { "message_id": <int>, "rating": 1 or -1 }
+    上書き可（押すたびに更新）
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+        message_id = int(payload.get("message_id"))
+        rating = int(payload.get("rating"))
+    except Exception:
+        return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
+
+    if rating not in (1, -1):
+        return JsonResponse({"ok": False, "error": "invalid_rating"}, status=400)
+
+    session = ChatSessionService.get_or_create_session(request)
+
+    try:
+        msg = ChatMessage.objects.select_related("session").get(id=message_id)
+    except ChatMessage.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "not_found"}, status=404)
+
+    if msg.session_id != session.id:
+        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
+
+    if msg.role != ChatMessage.Role.ASSISTANT:
+        return JsonResponse({"ok": False, "error": "not_assistant_message"}, status=400)
+
+    msg.rating = rating
+    msg.rated_at = timezone.now()
+    msg.save(update_fields=["rating", "rated_at"])
+
+    return JsonResponse({
+        "ok": True,
+        "message_id": msg.id,
+        "rating": msg.rating,
+        "rated_at": msg.rated_at.isoformat() if msg.rated_at else None,
+    })
 
 # --- ヘルパー関数群 ---
 def extract_department_code_from_meta(meta) -> str | None:

@@ -12,6 +12,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 STATICFILES_DIRS = [str(BASE_DIR / 'static')]
+STATIC_URL = 'static/'
+# Renderなど本番環境用
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # FAISS のインデックスファイルのパス
 FAISS_INDEX_PATH = BASE_DIR / "var" / "faiss" / "chunks.index"
@@ -24,12 +27,15 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-msjv83i+1)8x+8wl@d1a17no=$!l$*lp6%$9y^o&8l23$7xukr'
-
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    ".onrender.com",
+]
 
 
 # Application definition
@@ -48,13 +54,14 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -89,24 +96,38 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-if "DATABASE_URL" in os.environ:
+def strtobool(v: str | None) -> bool:
+    return str(v).lower() in ("1", "true", "yes", "on")
+
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
     # Render本番環境など（DATABASE_URL が設定されている場合はこちらを優先）
     DATABASES = {
         "default": dj_database_url.parse(
-            os.environ["DATABASE_URL"],
-            conn_max_age=600,
+            DATABASE_URL,
+            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "600")),
+            ssl_require=strtobool(os.getenv("DB_SSL_REQUIRE", "false")),
         )
     }
+
+    # health check / connection安定化
+    DATABASES["default"].setdefault("OPTIONS", {})
+    
+    if strtobool(os.getenv("DB_SSL_REQUIRE", "false")):
+        DATABASES["default"]["OPTIONS"].setdefault("sslmode", os.getenv("DB_SSLMODE", "require"))
+
 else:
-    # ローカル開発用：DockerのPostgreSQLを想定
+    # ローカル開発用：DockerのPostgreSQL
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("POSTGRES_DB", "ragdb"),
-            "USER": os.environ.get("POSTGRES_USER", "raguser"),
-            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "NAME": os.getenv("POSTGRES_DB", "ragdb"),
+            "USER": os.getenv("POSTGRES_USER", "raguser"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),
         }
     }
 
@@ -148,7 +169,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
