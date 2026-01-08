@@ -67,6 +67,7 @@ class AuditLog(models.Model):
         UPLOAD = "UPLOAD", "アップロード"
         DELETE = "DELETE", "削除"
         REINDEX = "REINDEX", "再インデックス"
+        REINDEX_ALL = "REINDEX_ALL", "全件再インデックス"
 
     class Status(models.TextChoices):
         SUCCESS = "SUCCESS", "成功"
