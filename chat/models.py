@@ -66,6 +66,20 @@ class ChatMessage(models.Model):
         help_text="RAGが参照したドキュメント情報(document単位で集約)",
 
     )
+    RATING_CHOICES = (
+        (1, "GOOD"),
+        (-1, "BAD"),
+    )
+
+    rating = models.SmallIntegerField(
+        null=True,
+        blank=True,
+        choices=RATING_CHOICES,
+        db_index=True,
+        verbose_name="評価",
+        help_text="1=GOOD, -1=BAD, null=未評価",
+    )
+    rated_at = models.DateTimeField("評価日時", null=True, blank=True)
 
     class Meta:
         verbose_name = "チャットメッセージ"

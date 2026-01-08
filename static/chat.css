@@ -134,6 +134,18 @@
   justify-content: flex-end;
 }
 
+/* 重要：評価UIを bubble の下に置けるように縦積みにする */
+.message-row.is-assistant {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* user は従来通り右寄せのまま */
+.message-row.is-user {
+  flex-direction: row;
+  align-items: flex-end;
+}
+
 .message-bubble {
   max-width: 80%;
   padding: 8px 12px;
@@ -348,4 +360,55 @@
     transform: translateY(-3px);
     opacity: 0.9;
   }
+}
+
+/* =========================
+   Rating (👍 👎)
+   ========================= */
+
+/* assistant の吹き出しの直下に表示 */
+.message-rating {
+  margin-top: 6px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 絵文字ボタンを “チップ” っぽく */
+.btn-rating {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition: transform 0.05s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-rating:hover {
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.10);
+}
+
+.btn-rating:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.btn-rating.is-active {
+  border-color: #111827;
+  font-weight: 700;
+}
+
+.btn-rating:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.rating-status {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.8;
 }
