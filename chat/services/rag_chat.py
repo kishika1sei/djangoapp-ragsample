@@ -17,6 +17,7 @@ class RAGChatService:
         if retriever is None:
             raise ValueError("HybridRetriever is required (hybrid mode).")
         self.retriever = retriever
+
     _AFFIRMATIONS = {"はい", "うん", "そう", "そうです", "ok", "okay", "了解", "りょうかい", "OK"}
     _NEGATIONS = {"いいえ", "ちがう", "違う", "違います", "no", "ノー", "違います。"}
 
@@ -207,7 +208,7 @@ class RAGChatService:
             if len(session_context) + len(line) > MAX_CHARS:
                 break
             session_context = line + session_context
-        # 0-1.分類器に業務判定と部門判定を委託する
+        # 分類器に業務判定と部門判定を委託する
         route = self.router.route(
             user_text=user_message,
             department_codes=dept_codes,
@@ -218,7 +219,7 @@ class RAGChatService:
         # ルーティング結果をmetaに載せる
         route_meta = route.model_dump() if hasattr(route, "model_dump") else dict(route)
 
-        # 0-2. 業務外なら、RAG処理に進まず返す
+        # 業務外なら、RAG処理に進まず返す
         if not route.is_business:
             return "本件は社内業務に関する問い合わせではない可能性が高いです。業務に関する内容であれば目的や対象手続きを具体的に教えてください。",{
                 "routing": route_meta,
@@ -250,10 +251,10 @@ class RAGChatService:
         # 検索用クエリを文脈で拡張
         effective_query_text = self._build_effective_query_text(user_message, history_messages)    
     
-        # 1. ユーザのクエリをベクトル化する(embeddingservice)
+        # ユーザのクエリをベクトル化する(embeddingservice)
         query_embedding = self.embedding_service.embed_text(effective_query_text)
         
-        # 2. FAISSにクエリを投げて似ているチャンクをtop_k件頂戴と聞く(search_backend)
+        # Hybridにクエリとクエリ埋め込みを投げて似ているチャンクをtop_k件分頂戴と聞く
         search_results, retrieval_meta = self._search_with_fallback(
             query_text=effective_query_text,
             query_embedding=query_embedding,
@@ -265,10 +266,11 @@ class RAGChatService:
         hit_count = int(retrieval_meta.get("hit_count", 0) or 0)
         # --- hybridはスコア閾値で弾かない---
         search_weak = (hit_count == 0)
-        # デバッグ用(TODO:後で消す)
-        print('#検索結果ここから')
-        print(search_results)
-        print('#検索結果ここまで')
+
+        # # デバッグ用(TODO:後で消すかコメントアウト)
+        # print('#検索結果ここから')
+        # print(search_results)
+        # print('#検索結果ここまで')
 
         # --- evidence strength（UXと安全性の折衷） ---
         vector_top = retrieval_meta.get("vector_top_score")
@@ -296,7 +298,7 @@ class RAGChatService:
             or (num_unique_docs == 1)
         )
 
-         # --- Hard1: 検索弱い → hard clarification（router質問があれば優先） ---
+         # --- 検索弱い場合は hard clarification（router質問があれば優先） ---
         if search_weak:
             q = self._choose_hard_clarification_question(
                 router_question=router_question,
@@ -319,7 +321,7 @@ class RAGChatService:
                 },
             )
 
-        # --- R2: routerがclarification要求 & 根拠も弱い → hard clarification ---
+        # --- routerがclarification要求 & 根拠も弱い → hard clarification ---
         # （“答えられるのに答えない”を避けるため、ここは evidence_strong を条件にしている）
         if router_needs_clarification and not evidence_strong:
             q = self._choose_hard_clarification_question(
@@ -345,7 +347,7 @@ class RAGChatService:
 
             
         
-        # 3. チャンク内容をもとにコンテキストを組み立てる
+        # チャンク内容をもとにコンテキストを組み立てる
         context_texts = []
 
         for result in search_results:
@@ -356,10 +358,10 @@ class RAGChatService:
         
         context_block = "\n\n".join(context_texts)
     
-        # 4. システムプロンプトを第一候補の部門から作成する
+        # システムプロンプトを第一候補の部門から作成する
         system_prompt =self._select_system_prompt(route.primary_department)
 
-        # 5. 最終的にLLMに渡すプロンプトを構築する
+        # 最終的にLLMに渡すプロンプトを構築する
         prompt = self._build_prompt(
             system_prompt=system_prompt,
             history=history_messages,
@@ -367,11 +369,11 @@ class RAGChatService:
             user_message=user_message,
         )
 
-        # 6. LLMを呼んで、回答を生成
+        # LMを呼んで、回答を生成
         answer_text = self.llm_client.complete(prompt)
 
-        # 7. meta 情報を (どのドキュメントを使ったか等) を組み立てて返す
-        # --- R3: routerがclarification要求 & 根拠が強い → soft clarification（末尾に1問だけ） ---
+        # meta 情報を (どのドキュメントを使ったか等) を組み立てて返す
+        # --- routerがclarification要求 & 根拠が強い → soft clarification（末尾に1問だけ） ---
         clarification_meta = {"mode": "none"}
         if router_needs_clarification and router_question and not self._is_generic_clarifying_question(router_question):
             answer_text = f"{answer_text}\n\n（念のため確認）{router_question}"

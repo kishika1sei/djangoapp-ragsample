@@ -11,7 +11,7 @@ def can_delete_document(user: User, document: Document) -> bool:
         return True
 
     if user.role == User.Role.DEPT_ADMIN:
-        # 部門未設定の場合は不可に倒す
+        # 部門未設定の場合は削除不可
         if user.department_id is None:
             return False
         return document.department_id == user.department_id
