@@ -1,11 +1,6 @@
-
-learning
 venv
 __pycache__
 *.pyc
 .env
 media/
 scripts/
-docs/
-# テスト用
-sample.pdf
