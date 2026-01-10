@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <title>社内問合せアプリ</title>
   <link rel="stylesheet" href="{% static 'base.css' %}?v=1">
-  <link rel="stylesheet" href="{% static 'chat.css' %}?v=1">
+  <link rel="stylesheet" href="{% static 'chat.css' %}?v=2">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
@@ -42,12 +42,12 @@
   <!-- メインエリア -->
   <main class="chat-main">
 
-    <!-- 左サイド：回答部門／拡張枠 -->
+    <!-- 左サイド -->
     <aside class="chat-side-left">
       <section class="panel">
         <h2 class="panel-title">回答部門</h2>
         <p class="panel-body dept-name" id="answer-department">
-          {{ answer_department|default:"部門名" }}
+          {{ answer_department|default:"総合窓口" }}
         </p>
       </section>
 
@@ -59,48 +59,60 @@
       </section>
     </aside>
 
-    <!-- 中央：メッセージエリア＋入力欄 -->
+    <!-- 中央 -->
     <section class="chat-center">
       <div class="messages-area" id="messages">
         {% for message in messages %}
-          <div class="message-row {% if message.role == 'assistant' %}is-assistant{% else %}is-user{% endif %}">
+          <div class="message-row {% if message.role == 'assistant' %}is-assistant{% else %}is-user{% endif %}"
+               {% if message.role == 'assistant' %}data-message-id="{{ message.id }}"{% endif %}>
             <div class="message-bubble">
               {{ message.content }}
             </div>
+
+            {% if message.role == 'assistant' %}
+              <div class="message-rating">
+                <button type="button"
+                        class="btn-rating {% if message.rating == 1 %}is-active{% endif %}"
+                        data-rating="1"
+                        aria-label="GOOD">👍</button>
+
+                <button type="button"
+                        class="btn-rating {% if message.rating == -1 %}is-active{% endif %}"
+                        data-rating="-1"
+                        aria-label="BAD">👎</button>
+                <span class="rating-status" aria-live="polite"></span>
+              </div>
+            {% endif %}
           </div>
         {% empty %}
           <div id="messages-empty">
-          <div class="message-row is-assistant">
-            <div class="message-bubble">
-              AIアシスタントからの回答がここに表示されます。
+            <div class="message-row is-assistant">
+              <div class="message-bubble">
+                AIアシスタントからの回答がここに表示されます。
+              </div>
+            </div>
+            <div class="message-row is-user">
+              <div class="message-bubble">
+                あなたの問い合わせ内容がここに表示されます。
+              </div>
             </div>
           </div>
-          <div class="message-row is-user">
-            <div class="message-bubble">
-              あなたの問い合わせ内容がここに表示されます。
-            </div>
-          </div>
-        </div>
         {% endfor %}
       </div>
 
       <form method="post" class="chat-input-area">
         {% csrf_token %}
-        <label class="input-label" for="message-input">
-          問い合わせ内容
-        </label>
+        <label class="input-label" for="message-input">問い合わせ内容</label>
         <div class="input-row">
           <textarea id="message-input" name="message" rows="3"
                     placeholder="例）4月入社の新卒社員の有給休暇付与日を教えてください。"></textarea>
           <button type="submit" class="submit-button">送信</button>
         </div>
-        <p class="input-hint">
-          Shift + Enter で改行できます。
-        </p>
+        <p class="input-hint">Shift + Enter で改行できます。</p>
       </form>
     </section>
 
-    <!-- 右サイド：出典表示エリア等 -->
+    <!-- 右サイド -->
     <aside class="chat-side-right">
       <section class="panel">
         <h2 class="panel-title">出典／資料</h2>
@@ -127,6 +139,7 @@
           </div>
         </div>
       </section>
+
       <section class="panel">
         <h2 class="panel-title">拡張エリア（例）</h2>
         <div class="panel-body">
@@ -136,29 +149,63 @@
     </aside>
 
   </main>
-
 </div>
+
 <script>
 (function () {
   const form = document.querySelector("form.chat-input-area");
   const textarea = document.getElementById("message-input");
   const messagesEl = document.getElementById("messages");
-
   if (!form || !textarea || !messagesEl) return;
 
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function createMessageRow(role, contentHtml) {
+  function getCsrfToken() {
+    const name = "csrftoken=";
+    const cookies = document.cookie.split(";").map(v => v.trim());
+    for (const c of cookies) {
+      if (c.startsWith(name)) return c.substring(name.length);
+    }
+    return "";
+  }
+
+  // HTMLエスケープ（XSS対策）
+  function escapeHtml(str) {
+    return (str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function createMessageRow(role, contentHtml, opts = {}) {
     const row = document.createElement("div");
     row.className = "message-row " + (role === "assistant" ? "is-assistant" : "is-user");
+
+    if (role === "assistant" && opts.messageId) {
+      row.dataset.messageId = String(opts.messageId);
+    }
 
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
     bubble.innerHTML = contentHtml;
-
     row.appendChild(bubble);
+
+    // assistantのときだけ評価UIを付与
+    if (role === "assistant" && opts.messageId) {
+      const ratingWrap = document.createElement("div");
+      ratingWrap.className = "message-rating";
+      ratingWrap.innerHTML = `
+        <button type="button" class="btn-rating ${Number(opts.rating) === 1 ? "is-active" : ""}" data-rating="1" aria-label="GOOD">👍</button>
+        <button type="button" class="btn-rating ${Number(opts.rating) === -1 ? "is-active" : ""}" data-rating="-1" aria-label="BAD">👎</button>
+        <span class="rating-status" aria-live="polite"></span>
+      `;
+      row.appendChild(ratingWrap);
+    }
+
     return row;
   }
 
@@ -174,136 +221,22 @@
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </span>
     `;
-
     row.appendChild(bubble);
     return row;
   }
 
-  function getCsrfToken() {
-    // cookie から csrftoken を取得（Django標準）
-    const name = "csrftoken=";
-    const cookies = document.cookie.split(";").map(v => v.trim());
-    for (const c of cookies) {
-      if (c.startsWith(name)) return c.substring(name.length);
+  function formatLocator(locator) {
+    if (!locator || !locator.type) return "";
+    if (locator.type === "page_set") {
+      const pages = Array.isArray(locator.pages) ? locator.pages : [];
+      return pages.length ? ("p." + pages.join(",")) : "";
+    }
+    if (locator.type === "chunk_set") {
+      const chunks = Array.isArray(locator.chunks) ? locator.chunks : [];
+      return chunks.length ? ("chunk #" + chunks.join(",")) : "";
     }
     return "";
   }
-
-  async function sendMessage() {
-    const text = textarea.value;
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const empty = document.getElementById("messages-empty");
-    if (empty) empty.remove();
-    // ユーザの吹き出しを即時反映（体感改善）
-    messagesEl.appendChild(createMessageRow("user", escapeHtml(text).replace(/\n/g, "<br>")));
-    scrollToBottom();
-
-    // 入力クリア（Shift+Enterで改行はそのまま。送信後はクリア）
-    textarea.value = "";
-
-    // タイピングインジケータ表示
-    const typingRow = createTypingRow();
-    messagesEl.appendChild(typingRow);
-    scrollToBottom();
-
-    // 二重送信抑止
-    const submitBtn = form.querySelector("button[type='submit']");
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-      const fd = new FormData(form);
-      fd.set("message", text); // 念のため上書き
-
-      const res = await fetch(window.location.href, {
-        method: "POST",
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-          "X-CSRFToken": getCsrfToken(),
-        },
-        body: fd,
-      });
-
-      if (!res.ok) {
-        throw new Error("HTTP " + res.status);
-      }
-
-      const data = await res.json();
-
-      // タイピング消す
-      const t = document.getElementById("typing-indicator-row");
-      if (t) t.remove();
-
-      // アシスタント吹き出し追加
-      const assistantHtml = escapeHtml(data.assistant || "").replace(/\n/g, "<br>");
-      messagesEl.appendChild(createMessageRow("assistant", assistantHtml));
-      scrollToBottom();
-
-      // 左ペインの部門表示を更新（answer_department が返る）
-      if (Object.prototype.hasOwnProperty.call(data, "answer_department")) {
-        const deptEl = document.getElementById("answer-department") || document.querySelector(".dept-name");
-        if (deptEl && data.answer_department) {
-          deptEl.textContent = data.answer_department;
-        }
-        // metaに部門が無い場合は更新せずに前回表示維持する
-      }
-      // 右ペインの出典を更新（meta.citations）
-      const citations = (data && data.meta && Array.isArray(data.meta.citations)) ? data.meta.citations : [];
-      renderCitations(citations);
-
-    } catch (e) {
-      // タイピング消す
-      const t = document.getElementById("typing-indicator-row");
-      if (t) t.remove();
-
-      messagesEl.appendChild(
-        createMessageRow("assistant", "エラーが発生しました。時間をおいて再度お試しください。")
-      );
-      scrollToBottom();
-      console.error(e);
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-      textarea.focus();
-    }
-  }
-
-  // Ctrl+Enter 送信、Shift+Enter 改行（デフォルト改行）
-  textarea.addEventListener("keydown", function (e) {
-    const isSend = (e.key === "Enter") && (e.ctrlKey || e.metaKey);
-    if (isSend) {
-      e.preventDefault();
-      sendMessage();
-    }
-    // Shift+Enter は改行のまま（何もしない）
-  });
-
-  // 通常のボタン送信もAJAX化
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    sendMessage();
-  });
-
-  // HTMLエスケープ（XSS対策）
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-  function formatLocator(locator) {
-  if (!locator || !locator.type) return "";
-  if (locator.type === "page_set") {
-    const pages = Array.isArray(locator.pages) ? locator.pages : [];
-    return pages.length ? ("p." + pages.join(",")) : "";
-  }
-  if (locator.type === "chunk_set") {
-    const chunks = Array.isArray(locator.chunks) ? locator.chunks : [];
-    return chunks.length ? ("chunk #" + chunks.join(",")) : "";
-  }
-  return "";
-}
 
   function renderCitations(citations) {
     const el = document.getElementById("citations");
@@ -328,6 +261,152 @@
     el.innerHTML = `<ul class="citations-list">${items}</ul>`;
   }
 
+  function setActiveRating(row, rating) {
+    const buttons = row.querySelectorAll(".btn-rating");
+    buttons.forEach(b => {
+      b.classList.toggle("is-active", Number(b.dataset.rating) === Number(rating));
+    });
+  }
+
+  async function submitRating(messageId, rating, row) {
+    const buttons = row.querySelectorAll(".btn-rating");
+    const statusEl = row.querySelector(".rating-status");
+    buttons.forEach(b => b.disabled = true);
+    if (statusEl) statusEl.textContent = "送信中…";
+
+    try {
+      const res = await fetch("{% url 'chat:submit_rating' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({ message_id: Number(messageId), rating: Number(rating) }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        if (statusEl) statusEl.textContent = "評価の登録に失敗しました";
+        return;
+      }
+
+      // サーバ値でUI確定
+      setActiveRating(row, data.rating);
+      if (statusEl) statusEl.textContent = (Number(data.rating) === 1) ? "GOODに更新しました" : "BADに更新しました";
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "通信エラーが発生しました";
+      console.error(e);
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+
+  async function sendMessage() {
+    const text = textarea.value;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const empty = document.getElementById("messages-empty");
+    if (empty) empty.remove();
+
+    // ユーザ吹き出し即時反映
+    messagesEl.appendChild(createMessageRow("user", escapeHtml(text).replace(/\n/g, "<br>")));
+    scrollToBottom();
+
+    textarea.value = "";
+
+    // typing
+    const typingRow = createTypingRow();
+    messagesEl.appendChild(typingRow);
+    scrollToBottom();
+
+    const submitBtn = form.querySelector("button[type='submit']");
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const fd = new FormData(form);
+      fd.set("message", text);
+
+      const res = await fetch(window.location.href, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: fd,
+      });
+
+      if (!res.ok) throw new Error("HTTP " + res.status);
+
+      const data = await res.json();
+
+      // typing消す
+      const t = document.getElementById("typing-indicator-row");
+      if (t) t.remove();
+
+      // assistant追加（評価UI付きにする）
+      const assistantHtml = escapeHtml(data.assistant || "").replace(/\n/g, "<br>");
+      messagesEl.appendChild(createMessageRow("assistant", assistantHtml, {
+        messageId: data.assistant_message_id,
+        rating: data.assistant_rating
+      }));
+      scrollToBottom();
+
+      // 部門更新
+      if (Object.prototype.hasOwnProperty.call(data, "answer_department")) {
+        const deptEl = document.getElementById("answer-department") || document.querySelector(".dept-name");
+        if (deptEl && data.answer_department) deptEl.textContent = data.answer_department;
+      }
+
+      // 出典更新
+      const citations = (data && data.meta && Array.isArray(data.meta.citations)) ? data.meta.citations : [];
+      renderCitations(citations);
+
+    } catch (e) {
+      const t = document.getElementById("typing-indicator-row");
+      if (t) t.remove();
+
+      messagesEl.appendChild(createMessageRow("assistant", "エラーが発生しました。時間をおいて再度お試しください。"));
+      scrollToBottom();
+      console.error(e);
+    } finally {
+      const submitBtn = form.querySelector("button[type='submit']");
+      if (submitBtn) submitBtn.disabled = false;
+      textarea.focus();
+    }
+  }
+
+  // Ctrl+Enter 送信
+  textarea.addEventListener("keydown", function (e) {
+    const isSend = (e.key === "Enter") && (e.ctrlKey || e.metaKey);
+    if (isSend) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // submitもAJAX化
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    sendMessage();
+  });
+
+  // 評価クリック
+  messagesEl.addEventListener("click", function (e) {
+    const btn = e.target.closest(".btn-rating");
+    if (!btn) return;
+
+    const row = btn.closest(".message-row.is-assistant");
+    const messageId = row && row.dataset ? row.dataset.messageId : null;
+    if (!messageId) return;
+
+    const rating = Number(btn.dataset.rating);
+    if (![1, -1].includes(rating)) return;
+
+    submitRating(messageId, rating, row);
+  });
+
+  scrollToBottom();
 })();
 </script>
 </body>

@@ -33,8 +33,7 @@ class RoutingService:
     ) -> RoutingResult:
         dept_codes = sorted(set([c.strip() for c in department_codes if c and c.strip()]))
 
-        # ここで「DBにある部門コード」だけを候補としてモデルに提示する
-        # （部門追加にも追従できる）
+        # 「DBにある部門コード」だけを候補としてモデルに提示する
         dept_hint = ", ".join(dept_codes) if dept_codes else "(none)"
 
         instructions = (

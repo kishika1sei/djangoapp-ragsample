@@ -255,12 +255,12 @@ class PDFContentExtractor(ContentExtractor):
             if empty_ratio >= self.empty_page_ratio_threshold:
                 warnings.append("image_pdf_suspected")
 
-        # mojibake（あなたの提示例に対応）
+        # 文字化け対応
         c1 = _c1_control_ratio(text)
         l1 = _latin1_ratio(text)
         jp = _japanese_ratio(text)
 
-        # 推奨判定：
+        # 文字化け判定(必要に応じて追加)：
         # - C1制御文字は強いシグナルなので単体でも疑う
         # - Latin-1は補助（日本語比率が低い時に強く疑う）
         if c1 > 0.003:
@@ -290,7 +290,7 @@ class PDFContentExtractor(ContentExtractor):
         if "pypdf2_advanced_encoding_unimplemented" in p_warn:
             return m_content, "pymupdf", m_warn
 
-        # 2) mojibake の片側優位も長さより優先（中身が壊れている可能性が高い）
+        # 2) 文字化け の片側優位も長さより優先（中身が壊れている可能性が高い）
         if ("mojibake_suspected" in p_warn) and ("mojibake_suspected" not in m_warn):
             return m_content, "pymupdf", m_warn
         if ("mojibake_suspected" in m_warn) and ("mojibake_suspected" not in p_warn):
@@ -375,7 +375,7 @@ class TextContentExtractor(ContentExtractor):
 
 
 # -----------------------------
-# CSV Extractor（表構造を壊さないために key=value 正規化まで実施）
+# CSV Extractor
 # -----------------------------
 class CSVContentExtractor(ContentExtractor):
     def __init__(
@@ -449,7 +449,7 @@ class CSVContentExtractor(ContentExtractor):
 
 
 # -----------------------------
-# Factory（既存構造に馴染む形）
+# Factory
 # -----------------------------
 DEFAULT_EXTRACTORS: List[ContentExtractor] = [
     PDFContentExtractor(),
