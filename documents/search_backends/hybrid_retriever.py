@@ -56,6 +56,7 @@ class HybridRetriever:
 
         # --- RRF融合（順位ベース） ---
         # chunk_id -> accumulator
+        # aggregate
         agg: dict[int, dict] = {}
 
         def add_rrf(results: list[SearchResult], source: str) -> None:
