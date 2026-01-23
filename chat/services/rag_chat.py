@@ -8,11 +8,11 @@ from accounts.models import Department
 from documents.search_backends.hybrid_retriever import HybridRetriever
 
 class RAGChatService:
-    def __init__(self,search_backend,embedding_service,llm_client, router: RoutingService | None = None, retriever: HybridRetriever | None = None,):
+    def __init__(self,search_backend,embedding_service,llm_client, router: RoutingService, retriever: HybridRetriever | None = None,):
         self.search_backend = search_backend
         self.embedding_service = embedding_service
         self.llm_client = llm_client
-        self.router = router or RoutingService(model="gpt-4.1-nano")
+        self.router = router
         # 本番想定：ハイブリッド固定で実装を前提のため、必須化
         if retriever is None:
             raise ValueError("HybridRetriever is required (hybrid mode).")

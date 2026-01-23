@@ -5,6 +5,7 @@ from documents.search_backends.lexical_retriever import LexicalRetriever, Lexica
 from documents.search_backends.hybrid_retriever import HybridRetriever, RRFConfig
 from chat.services.rag_chat import RAGChatService
 from chat.services.llm_client import OpenAILlmClient
+from chat.services.routing_service import RoutingService
 
 # --- 共通コンポーネント ---
 embedding_service = EmbeddingService()
@@ -37,11 +38,14 @@ hybrid_retriever = HybridRetriever(
 # --- LLM ---
 llm_client = OpenAILlmClient(api_key=settings.OPENAI_API_KEY)
 
+# --- Routing service ---
+router = RoutingService(model="gpt-4.1-nano")
 
 # --- RAG service（hybrid固定） ---
 rag_service = RAGChatService(
     search_backend=search_backend,
     embedding_service=embedding_service,
     llm_client=llm_client,
+    router=router,
     retriever=hybrid_retriever, 
 )
